@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 
-	"github.com/desulaidovich/config"
-	"github.com/desulaidovich/internal/app"
-	"github.com/desulaidovich/pkg/env"
-	"github.com/desulaidovich/pkg/log"
-	"github.com/desulaidovich/pkg/runner"
+	"github.com/Desulaidovich/app/config"
+	"github.com/Desulaidovich/app/internal/app"
+	"github.com/Desulaidovich/app/pkg/env"
+	"github.com/Desulaidovich/app/pkg/log"
+	"github.com/Desulaidovich/app/pkg/runner"
 )
 
 func main() {

@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 
-	"github.com/desulaidovich/config"
-	"github.com/desulaidovich/pkg/log"
+	"github.com/Desulaidovich/app/config"
+	"github.com/Desulaidovich/app/pkg/log"
 )
 
 type App struct {
