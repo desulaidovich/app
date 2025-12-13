@@ -1,0 +1,166 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+  sort-results: true
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    exclude-functions:
+      - (io.Closer).Close
+      - (*bytes.Buffer).WriteString
+      - (*strings.Builder).WriteString
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport # иногда нужно для side effects
+      - hugeParam # для больших структур
+      - ifElseChain # иногда читаемее
+
+  govet:
+    check-shadowing: true
+    enable:
+      - fieldalignment
+      - nilness
+
+  misspell:
+    locale: US
+
+  nolintlint:
+    require-explanation: true
+    require-specific: true
+
+  revive:
+    severity: warning
+    confidence: 0.8
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+
+  staticcheck:
+    checks: ["all", "-SA1019"]
+
+  unused:
+    check-exported: false
+
+  whitespace:
+    multi-if: true
+    multi-func: true
+
+linters:
+  disable-all: true
+  enable:
+    # Стандартные линтеры
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+    
+    # Стиль кода
+    - gofmt
+    - goimports
+    - goconst
+    - gocyclo
+    - gocritic
+    - revive
+    
+    # Дополнительные проверки
+    - misspell
+    - unparam
+    - prealloc
+    - dogsled
+    - nakedret
+    - bodyclose
+    - noctx
+    - exportloopref
+    - sqlclosecheck
+    - rowserrcheck
+    - makezero
+    - dupl
+    - whitespace
+    - wsl
+    - nolintlint
+
+issues:
+  exclude-rules:
+    # Исключаем некоторые часто игнорируемые проверки
+    - path: _test\.go$
+      linters:
+        - errcheck
+        - dupl
+    
+    # Исключаем protobuf и generated файлы
+    - path: ".*\\.pb\\.go$"
+      linters:
+        - all
+    
+    - path: ".*/mocks/.*"
+      linters:
+        - all
+    
+    - text: "Error return value of"
+      linters:
+        - errcheck
+      source: "^\\s*defer .*\\.Close\\(\\)$"
+    
+    # Исключаем проверку отложенных закрытий
+    - text: "G307"
+      linters:
+        - gosec
+
+  max-same-issues: 50
+  exclude-use-default: false
+  exclude:
+    # Общие исключения
+    - "declaration of \"err\" shadows declaration"
+    - "should have comment or be unexported"
+    - "comment on exported.*"
+    - "exported.*should have comment.*"
+
+  exclude-case-sensitive: false
+  fix: true
+
+severity:
+  default-severity: error
