@@ -1,83 +1,215 @@
 package log
 
 import (
+	"io"
 	"log/slog"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 )
 
 const (
-	TimeFormat = "02-01-2006 15:04:05.000"
+	OutputJSON = "json"
+	OutputText = "text"
 )
 
-type Logger struct {
+type Logger interface {
+	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
+	With(fields map[string]any) Logger
+}
+
+type loggerImpl struct {
 	logger *slog.Logger
 }
 
-func New(level string) *Logger {
-	levelMap := map[string]slog.Level{
+type options struct {
+	level      slog.Level
+	output     io.Writer
+	format     string
+	timeFormat string
+	addSource  bool
+}
+
+type Option func(*options) error
+
+func WithLevel(level string) Option {
+	m := map[string]slog.Level{
 		"debug": slog.LevelDebug,
 		"info":  slog.LevelInfo,
 		"warn":  slog.LevelWarn,
-		"err":   slog.LevelError,
+		"error": slog.LevelError,
 	}
 
-	var (
-		lvl   slog.Level
-		exist bool
-	)
+	return func(o *options) error {
+		o.level = m[strings.ToLower(level)]
+		return nil
+	}
+}
 
-	lvl, exist = levelMap[strings.ToLower(level)]
-	if !exist {
-		lvl = slog.LevelDebug
+func WithOutput(w io.Writer) Option {
+	return func(o *options) error {
+		o.output = w
+		return nil
+	}
+}
+
+func WithFormat(format string) Option {
+	return func(o *options) error {
+		if format != OutputJSON && format != OutputText {
+			format = OutputJSON
+		}
+		o.format = format
+		return nil
+	}
+}
+
+func WithTimeFormat(timeFormat string) Option {
+	return func(o *options) error {
+		o.timeFormat = timeFormat
+		return nil
+	}
+}
+
+func WithAddSource(add bool) Option {
+	return func(o *options) error {
+		o.addSource = add
+		return nil
+	}
+}
+
+func New(opts ...Option) (Logger, error) {
+	o := &options{
+		level:      slog.LevelInfo,
+		output:     os.Stdout,
+		format:     OutputJSON,
+		timeFormat: time.Stamp,
+		addSource:  false,
 	}
 
-	opts := &slog.HandlerOptions{
-		Level: lvl,
-		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-			switch a.Key {
-			case slog.TimeKey:
-				return slog.String(slog.TimeKey, time.Now().Format(TimeFormat))
+	for _, opt := range opts {
+		if err := opt(o); err != nil {
+			return nil, err
+		}
+	}
 
-			case slog.LevelKey:
-				level := map[string]string{
-					"DEBUG": "DBG",
-					"INFO":  "INF",
-					"WARN":  "WRN",
-					"ERROR": "ERR",
-				}
+	optsHandler := &slog.HandlerOptions{
+		Level:     o.level,
+		AddSource: o.addSource,
+	}
 
-				return slog.String(slog.LevelKey, level[a.Value.String()])
+	optsHandler.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
+		switch a.Key {
+		case slog.TimeKey:
+			return slog.String(slog.TimeKey, time.Now().Format(o.timeFormat))
+		case slog.LevelKey:
+			short := map[slog.Level]string{
+				slog.LevelDebug: "DBG",
+				slog.LevelInfo:  "INF",
+				slog.LevelWarn:  "WRN",
+				slog.LevelError: "ERR",
 			}
-
-			return a
-		},
+			if v, ok := short[a.Value.Any().(slog.Level)]; ok {
+				return slog.String(slog.LevelKey, v)
+			}
+		}
+		return a
 	}
 
-	return &Logger{
-		logger: slog.New(slog.NewJSONHandler(os.Stdout, opts)),
+	var handler slog.Handler
+	switch o.format {
+	case OutputJSON:
+		handler = slog.NewJSONHandler(o.output, optsHandler)
+	default:
+		handler = slog.NewTextHandler(o.output, optsHandler)
+	}
+
+	return &loggerImpl{
+		logger: slog.New(handler),
+	}, nil
+}
+
+func (l *loggerImpl) With(fields map[string]any) Logger {
+	attrs := make([]any, 0, len(fields))
+	for k, v := range fields {
+		attrs = append(attrs, toSlogAttr(k, v))
+	}
+	return &loggerImpl{
+		logger: l.logger.With(attrs...),
 	}
 }
 
-func (l *Logger) With(args ...any) *Logger {
-	return &Logger{
-		logger: l.logger.With(args...),
+// toSlogAttr рекурсивно преобразует значение в slog.Attr,
+// создавая группы для структур и карт
+func toSlogAttr(key string, val any) slog.Attr {
+	if val == nil {
+		return slog.Any(key, nil)
+	}
+
+	v := reflect.ValueOf(val)
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return slog.Any(key, nil)
+		}
+		v = v.Elem()
+	}
+
+	switch v.Kind() {
+	case reflect.Struct:
+		if v.Type() == reflect.TypeFor[time.Time]() {
+			return slog.Any(key, val)
+		}
+
+		attrs := make([]slog.Attr, 0, v.NumField())
+		for i := 0; i < v.NumField(); i++ {
+			field := v.Type().Field(i)
+			if !field.IsExported() {
+				continue
+			}
+			attrs = append(attrs, toSlogAttr(field.Name, v.Field(i).Interface()))
+		}
+
+		args := make([]any, len(attrs))
+		for i, attr := range attrs {
+			args[i] = attr
+		}
+		return slog.Group(key, args...)
+
+	case reflect.Map:
+		attrs := make([]slog.Attr, 0, v.Len())
+		for _, k := range v.MapKeys() {
+			if k.Kind() != reflect.String {
+				continue
+			}
+			attrs = append(attrs, toSlogAttr(k.String(), v.MapIndex(k).Interface()))
+		}
+
+		args := make([]any, len(attrs))
+		for i, attr := range attrs {
+			args[i] = attr
+		}
+		return slog.Group(key, args...)
+
+	default:
+		return slog.Any(key, val)
 	}
 }
 
-func (l *Logger) Debug(msg string) {
-	l.logger.Debug(msg)
+func (l *loggerImpl) Debug(msg string, args ...any) {
+	l.logger.Debug(msg, args...)
 }
 
-func (l *Logger) Info(msg string) {
-	l.logger.Info(msg)
+func (l *loggerImpl) Info(msg string, args ...any) {
+	l.logger.Info(msg, args...)
 }
 
-func (l *Logger) Warn(msg string) {
-	l.logger.Warn(msg)
+func (l *loggerImpl) Warn(msg string, args ...any) {
+	l.logger.Warn(msg, args...)
 }
 
-func (l *Logger) Error(msg string) {
-	l.logger.Error(msg)
+func (l *loggerImpl) Error(msg string, args ...any) {
+	l.logger.Error(msg, args...)
 }
