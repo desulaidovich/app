@@ -1,6 +1,8 @@
 package log
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -45,13 +47,20 @@ func WithLevel(level string) Option {
 	}
 
 	return func(o *options) error {
-		o.level = m[strings.ToLower(level)]
+		l, ok := m[strings.ToLower(level)]
+		if !ok {
+			return fmt.Errorf("unsupported log level: %q (valid: debug, info, warn, error)", level)
+		}
+		o.level = l
 		return nil
 	}
 }
 
 func WithOutput(w io.Writer) Option {
 	return func(o *options) error {
+		if w == nil {
+			return errors.New("output writer cannot be nil")
+		}
 		o.output = w
 		return nil
 	}
@@ -60,7 +69,7 @@ func WithOutput(w io.Writer) Option {
 func WithFormat(format string) Option {
 	return func(o *options) error {
 		if format != OutputJSON && format != OutputText {
-			format = OutputJSON
+			return fmt.Errorf("unsupported log format: %q (valid: %s, %s)", format, OutputJSON, OutputText)
 		}
 		o.format = format
 		return nil
@@ -69,6 +78,9 @@ func WithFormat(format string) Option {
 
 func WithTimeFormat(timeFormat string) Option {
 	return func(o *options) error {
+		if timeFormat == "" {
+			return errors.New("time format cannot be empty")
+		}
 		o.timeFormat = timeFormat
 		return nil
 	}

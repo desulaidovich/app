@@ -95,6 +95,16 @@ func WithConnectTimeout(timeout time.Duration) Option {
 	}
 }
 
+func WithDSN(dsn string) Option {
+	return func(c *Config) error {
+		if dsn == "" {
+			return errors.New("dsn cannot be empty")
+		}
+		c.DSN = dsn
+		return nil
+	}
+}
+
 func WithSSLMode(mode string) Option {
 	return func(c *Config) error {
 		validModes := map[string]bool{
@@ -112,13 +122,8 @@ func WithSSLMode(mode string) Option {
 	}
 }
 
-func New(ctx context.Context, dsn string, opts ...Option) (*Pool, error) {
-	if dsn == "" {
-		return nil, errors.New("dsn cannot be empty")
-	}
-
+func New(ctx context.Context, opts ...Option) (*Pool, error) {
 	config := &Config{
-		DSN:               dsn,
 		MaxConns:          defaultMaxConns,
 		MinConns:          defaultMinConns,
 		MaxConnLifetime:   defaultMaxConnLifetime,
@@ -131,6 +136,10 @@ func New(ctx context.Context, dsn string, opts ...Option) (*Pool, error) {
 		if err := opt(config); err != nil {
 			return nil, fmt.Errorf("failed to apply option: %w", err)
 		}
+	}
+
+	if config.DSN == "" {
+		return nil, errors.New("dsn is required: use WithDSN option")
 	}
 
 	pgxConfig, err := pgxpool.ParseConfig(config.DSN)

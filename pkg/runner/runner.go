@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -17,10 +18,32 @@ type Runner struct {
 	wg      sync.WaitGroup
 }
 
-func New(handler Handler) *Runner {
-	return &Runner{
-		handler: handler,
+type Option func(*Runner) error
+
+func WithHandler(handler Handler) Option {
+	return func(r *Runner) error {
+		if handler == nil {
+			return errors.New("handler cannot be nil")
+		}
+		r.handler = handler
+		return nil
 	}
+}
+
+func New(opts ...Option) (*Runner, error) {
+	r := new(Runner)
+
+	for _, opt := range opts {
+		if err := opt(r); err != nil {
+			return nil, err
+		}
+	}
+
+	if r.handler == nil {
+		return nil, errors.New("handler is required")
+	}
+
+	return r, nil
 }
 
 func (r *Runner) Run(ctx context.Context) error {

@@ -19,7 +19,8 @@ func main() {
 		panic("failed to load config: " + err.Error())
 	}
 
-	db, err := postgres.New(ctx, cfg.DSN(),
+	db, err := postgres.New(ctx,
+		postgres.WithDSN(cfg.DSN()),
 		postgres.WithMaxConns(cfg.Database.Pool.MaxConns),
 		postgres.WithMinConns(cfg.Database.Pool.MinConns),
 		postgres.WithMaxConnLifetime(cfg.Database.Pool.MaxConnLifetime),
@@ -38,20 +39,30 @@ func main() {
 		log.WithTimeFormat(cfg.Log.TimeFormat),
 	)
 	if err != nil {
-		panic("failed to create logger" + err.Error())
+		panic("failed to create logger: " + err.Error())
 	}
 
 	logger.With(map[string]any{
 		"config_json": cfg,
-	}).Debug("Loaded conrfig")
+	}).Debug("Loaded config")
 
-	app := app.New(
+	application, err := app.New(
 		app.WithVersion("1.0.0", "123qwe"),
 		app.WithConfig(&cfg),
 		app.WithLogger(logger),
 	)
+	if err != nil {
+		panic("failed to create application: " + err.Error())
+	}
 
-	if err := runner.New(app).Run(context.Background()); err != nil {
+	r, err := runner.New(
+		runner.WithHandler(application),
+	)
+	if err != nil {
+		panic("failed to create runner: " + err.Error())
+	}
+
+	if err := r.Run(context.Background()); err != nil {
 		panic("failed to run application: " + err.Error())
 	}
 }
