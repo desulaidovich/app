@@ -127,9 +127,9 @@ const file_health_v1_health_proto_rawDesc = "" +
 	"\x0eHealthResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x14\n" +
-	"\x05build\x18\x03 \x01(\tR\x05build2_\n" +
-	"\rHealthService\x12N\n" +
-	"\x06Health\x12\x18.health.v1.HealthRequest\x1a\x19.health.v1.HealthResponse\"\x0f\x82\xd3\xe4\x93\x02\t\x12\a/healthB5Z3github.com/desulaidovich/app/api/health/v1;healthv1b\x06proto3"
+	"\x05build\x18\x03 \x01(\tR\x05build2f\n" +
+	"\rHealthService\x12U\n" +
+	"\x06Health\x12\x18.health.v1.HealthRequest\x1a\x19.health.v1.HealthResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/api/v1/healthB5Z3github.com/desulaidovich/app/api/health/v1;healthv1b\x06proto3"
 
 var (
 	file_health_v1_health_proto_rawDescOnce sync.Once

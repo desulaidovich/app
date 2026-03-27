@@ -36,7 +36,7 @@ make run
 
 ```bash
 # HTTP
-curl http://localhost:8080/health
+curl http://localhost:8080/api/v1/health
 
 # gRPC (требует APP_DEBUG=true)
 grpcurl -plaintext localhost:9090 health.v1.HealthService/Health
