@@ -9,7 +9,6 @@ import (
 
 	"github.com/desulaidovich/app/config"
 	"github.com/desulaidovich/app/internal/migrator"
-	"github.com/desulaidovich/app/internal/postgres"
 	"github.com/desulaidovich/app/pkg/env"
 	"github.com/desulaidovich/app/pkg/log"
 )
@@ -40,20 +39,6 @@ func main() {
 	if *cmd == "" {
 		panic("Команда не указана")
 	}
-
-	db, err := postgres.New(ctx,
-		postgres.WithDSN(cfg.DSN()),
-		postgres.WithMaxConns(cfg.Database.Pool.MaxConns),
-		postgres.WithMinConns(cfg.Database.Pool.MinConns),
-		postgres.WithMaxConnLifetime(cfg.Database.Pool.MaxConnLifetime),
-		postgres.WithMaxConnIdleTime(cfg.Database.Pool.MaxConnIdleTime),
-		postgres.WithConnectTimeout(cfg.Database.Pool.ConnectTimeout),
-		postgres.WithSSLMode(cfg.Database.SSLMode),
-	)
-	if err != nil {
-		panic("failed to connect to database: " + err.Error())
-	}
-	defer db.Close()
 
 	m, err := migrator.New(cfg.DSN())
 	if err != nil {
