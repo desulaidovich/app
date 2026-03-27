@@ -55,7 +55,7 @@ func main() {
 	}
 	defer db.Close()
 
-	m, err := migrator.New(db, cfg.DSN())
+	m, err := migrator.New(cfg.DSN())
 	if err != nil {
 		panic("failed to init migrator: " + err.Error())
 	}

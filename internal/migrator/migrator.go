@@ -6,8 +6,6 @@ import (
 	"fmt"
 
 	"github.com/pressly/goose/v3"
-
-	"github.com/desulaidovich/app/internal/postgres"
 )
 
 const (
@@ -18,11 +16,10 @@ const (
 )
 
 type Migrator struct {
-	pool *postgres.Pool
-	db   *sql.DB
+	db *sql.DB
 }
 
-func New(pool *postgres.Pool, dsn string) (*Migrator, error) {
+func New(dsn string) (*Migrator, error) {
 	if err := goose.SetDialect("postgres"); err != nil {
 		return nil, fmt.Errorf("migrator: failed to set dialect: %w", err)
 	}
@@ -36,8 +33,7 @@ func New(pool *postgres.Pool, dsn string) (*Migrator, error) {
 	}
 
 	return &Migrator{
-		pool: pool,
-		db:   db,
+		db: db,
 	}, nil
 }
 
