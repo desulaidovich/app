@@ -1,0 +1,5 @@
+@baseUrl = http://localhost:8080
+
+### GET запрос к health (пример)
+GET {{baseUrl}}/api/v1/health
+

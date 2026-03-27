@@ -9,7 +9,7 @@ option go_package = "github.com/desulaidovich/app/api/health/v1;healthv1";
 service HealthService {
   rpc Health(HealthRequest) returns (HealthResponse) {
     option (google.api.http) = {
-      get: "/health"
+      get: "/api/v1/health"
     };
   }
 }

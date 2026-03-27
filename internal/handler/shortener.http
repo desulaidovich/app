@@ -1,0 +1,73 @@
+@baseUrl = http://localhost:8080
+@shortCode = abc123
+@customCode = mylink123
+@userId = user_12345
+
+### Создание короткой ссылки (автоматическая генерация кода)
+POST {{baseUrl}}/api/v1/shorten
+Content-Type: application/json
+
+{
+  "original_url": "https://example.com/very/long/url/that/needs/to/be/shortened",
+  "user_id": "{{userId}}"
+}
+
+### Создание короткой ссылки с кастомным кодом
+POST {{baseUrl}}/api/v1/shorten
+Content-Type: application/json
+
+{
+  "original_url": "https://github.com/desulaidovich/app",
+  "custom_code": "{{customCode}}",
+  "user_id": "{{userId}}"
+}
+
+### Создание короткой ссылки с временем жизни (TTL в секундах)
+POST {{baseUrl}}/api/v1/shorten
+Content-Type: application/json
+
+{
+  "original_url": "https://example.com/temporary-link",
+  "ttl_seconds": 3600,
+  "user_id": "{{userId}}"
+}
+
+### Получение оригинального URL по короткому коду (через API)
+GET {{baseUrl}}/api/v1/{{shortCode}}
+
+### Получение оригинального URL по кастомному коду
+GET {{baseUrl}}/api/v1/{{customCode}}
+
+### Редирект на оригинальный URL (браузерный переход)
+GET {{baseUrl}}/{{shortCode}}
+
+### Редирект по кастомному коду
+GET {{baseUrl}}/{{customCode}}
+
+### Получение полной статистики по ссылке
+GET {{baseUrl}}/api/v1/stats/{{shortCode}}
+
+### Статистика по ссылке за день
+GET {{baseUrl}}/api/v1/stats/{{shortCode}}?period=day
+
+### Статистика по ссылке за неделю
+GET {{baseUrl}}/api/v1/stats/{{shortCode}}?period=week
+
+### Статистика по ссылке за месяц
+GET {{baseUrl}}/api/v1/stats/{{shortCode}}?period=month
+
+### Обновление ссылки (изменение URL, TTL, статуса)
+PUT {{baseUrl}}/api/v1/{{shortCode}}
+Content-Type: application/json
+
+{
+  "new_original_url": "https://example.com/updated-url",
+  "ttl_seconds": 7200,
+  "is_active": true
+}
+
+### Удаление ссылки
+DELETE {{baseUrl}}/api/v1/{{shortCode}}
+
+### Получение списка ссылок пользователя с пагинацией и сортировкой
+GET {{baseUrl}}/api/v1/links?user_id={{userId}}&page=1&page_size=10&sort_by=created_at&sort_order=desc
