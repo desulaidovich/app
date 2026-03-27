@@ -1,12 +1,15 @@
 package log
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 )
@@ -14,13 +17,31 @@ import (
 const (
 	OutputJSON = "json"
 	OutputText = "text"
+
+	LevelPanic = slog.Level(12)
 )
 
+var levelNames = map[slog.Level]string{
+	slog.LevelDebug: "DBG",
+	slog.LevelInfo:  "INF",
+	slog.LevelWarn:  "WRN",
+	slog.LevelError: "ERR",
+	LevelPanic:      "PNC",
+}
+
+// Logger определяет интерфейс для логирования с поддержкой уровней и структурированных полей.
 type Logger interface {
+	// Debug логирует сообщение на уровне DEBUG.
 	Debug(msg string, args ...any)
+	// Info логирует сообщение на уровне INFO.
 	Info(msg string, args ...any)
+	// Warn логирует сообщение на уровне WARN.
 	Warn(msg string, args ...any)
+	// Error логирует сообщение на уровне ERROR.
 	Error(msg string, args ...any)
+	// Panic логирует сообщение на уровне PANIC и завершает программу с кодом 1.
+	Panic(msg string, args ...any)
+	// With возвращает новый логгер с добавленными полями, которые будут включены во все последующие записи.
 	With(fields map[string]any) Logger
 }
 
@@ -33,11 +54,12 @@ type options struct {
 	output     io.Writer
 	format     string
 	timeFormat string
-	addSource  bool
 }
 
 type Option func(*options) error
 
+// WithLevel устанавливает уровень логирования.
+// Допустимые значения: debug, info, warn, error.
 func WithLevel(level string) Option {
 	m := map[string]slog.Level{
 		"debug": slog.LevelDebug,
@@ -56,6 +78,7 @@ func WithLevel(level string) Option {
 	}
 }
 
+// WithOutput устанавливает вывод логов. По умолчанию используется os.Stdout.
 func WithOutput(w io.Writer) Option {
 	return func(o *options) error {
 		if w == nil {
@@ -66,6 +89,8 @@ func WithOutput(w io.Writer) Option {
 	}
 }
 
+// WithFormat устанавливает формат вывода логов.
+// Допустимые значения: json, text.
 func WithFormat(format string) Option {
 	return func(o *options) error {
 		if format != OutputJSON && format != OutputText {
@@ -76,6 +101,8 @@ func WithFormat(format string) Option {
 	}
 }
 
+// WithTimeFormat устанавливает формат времени в логах.
+// Использует стандартные форматы времени Go.
 func WithTimeFormat(timeFormat string) Option {
 	return func(o *options) error {
 		if timeFormat == "" {
@@ -86,20 +113,14 @@ func WithTimeFormat(timeFormat string) Option {
 	}
 }
 
-func WithAddSource(add bool) Option {
-	return func(o *options) error {
-		o.addSource = add
-		return nil
-	}
-}
-
+// New создает новый экземпляр Logger с указанными опциями.
+// По умолчанию используется уровень INFO, вывод в stdout, формат JSON и формат времени time.Stamp.
 func New(opts ...Option) (Logger, error) {
 	o := &options{
 		level:      slog.LevelInfo,
 		output:     os.Stdout,
 		format:     OutputJSON,
 		timeFormat: time.Stamp,
-		addSource:  false,
 	}
 
 	for _, opt := range opts {
@@ -108,54 +129,66 @@ func New(opts ...Option) (Logger, error) {
 		}
 	}
 
-	optsHandler := &slog.HandlerOptions{
-		Level:     o.level,
-		AddSource: o.addSource,
-	}
-
-	optsHandler.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
-		switch a.Key {
-		case slog.TimeKey:
-			return slog.String(slog.TimeKey, time.Now().Format(o.timeFormat))
-		case slog.LevelKey:
-			short := map[slog.Level]string{
-				slog.LevelDebug: "DBG",
-				slog.LevelInfo:  "INF",
-				slog.LevelWarn:  "WRN",
-				slog.LevelError: "ERR",
+	handlerOpts := &slog.HandlerOptions{
+		Level: o.level,
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			switch a.Key {
+			case slog.TimeKey:
+				return slog.String(slog.TimeKey, time.Now().Format(o.timeFormat))
+			case slog.LevelKey:
+				if name, ok := levelNames[a.Value.Any().(slog.Level)]; ok {
+					return slog.String(slog.LevelKey, name)
+				}
+				if level, ok := a.Value.Any().(slog.Level); ok && level == LevelPanic {
+					return slog.String(slog.LevelKey, "PNC")
+				}
 			}
-			if v, ok := short[a.Value.Any().(slog.Level)]; ok {
-				return slog.String(slog.LevelKey, v)
-			}
-		}
-		return a
+			return a
+		},
 	}
 
 	var handler slog.Handler
 	switch o.format {
 	case OutputJSON:
-		handler = slog.NewJSONHandler(o.output, optsHandler)
+		handler = slog.NewJSONHandler(o.output, handlerOpts)
 	default:
-		handler = slog.NewTextHandler(o.output, optsHandler)
+		handler = slog.NewTextHandler(o.output, handlerOpts)
 	}
 
-	return &loggerImpl{
-		logger: slog.New(handler),
-	}, nil
+	return &loggerImpl{logger: slog.New(handler)}, nil
 }
 
+// With возвращает новый логгер с добавленными полями.
+// Поля сортируются по ключам для обеспечения консистентного вывода.
 func (l *loggerImpl) With(fields map[string]any) Logger {
 	attrs := make([]any, 0, len(fields))
-	for k, v := range fields {
-		attrs = append(attrs, toSlogAttr(k, v))
+	for _, k := range slices.Sorted(maps.Keys(fields)) {
+		attrs = append(attrs, toSlogAttr(k, fields[k]))
 	}
-	return &loggerImpl{
-		logger: l.logger.With(attrs...),
-	}
+	return &loggerImpl{logger: l.logger.With(attrs...)}
 }
 
-// toSlogAttr рекурсивно преобразует значение в slog.Attr,
-// создавая группы для структур и карт
+// Debug логирует сообщение на уровне DEBUG.
+func (l *loggerImpl) Debug(msg string, args ...any) { l.logger.Debug(msg, args...) }
+
+// Info логирует сообщение на уровне INFO.
+func (l *loggerImpl) Info(msg string, args ...any) { l.logger.Info(msg, args...) }
+
+// Warn логирует сообщение на уровне WARN.
+func (l *loggerImpl) Warn(msg string, args ...any) { l.logger.Warn(msg, args...) }
+
+// Error логирует сообщение на уровне ERROR.
+func (l *loggerImpl) Error(msg string, args ...any) { l.logger.Error(msg, args...) }
+
+// Panic логирует сообщение на уровне PANIC и завершает программу с кодом 1.
+func (l *loggerImpl) Panic(msg string, args ...any) {
+	l.logger.Log(context.Background(), LevelPanic, msg, args...)
+	os.Exit(1)
+}
+
+// toSlogAttr преобразует ключ и значение в slog.Attr.
+// Поддерживает рекурсивную обработку структур и мап, преобразуя их в группы атрибутов.
+// nil-значения обрабатываются корректно.
 func toSlogAttr(key string, val any) slog.Attr {
 	if val == nil {
 		return slog.Any(key, nil)
@@ -171,57 +204,45 @@ func toSlogAttr(key string, val any) slog.Attr {
 
 	switch v.Kind() {
 	case reflect.Struct:
+		// Для time.Time возвращаем как есть, без разворачивания полей
 		if v.Type() == reflect.TypeFor[time.Time]() {
 			return slog.Any(key, val)
 		}
-
+		// Для остальных структур разворачиваем экспортируемые поля
 		attrs := make([]slog.Attr, 0, v.NumField())
 		for i := 0; i < v.NumField(); i++ {
-			field := v.Type().Field(i)
-			if !field.IsExported() {
-				continue
+			f := v.Type().Field(i)
+			if f.IsExported() {
+				attrs = append(attrs, toSlogAttr(f.Name, v.Field(i).Interface()))
 			}
-			attrs = append(attrs, toSlogAttr(field.Name, v.Field(i).Interface()))
 		}
-
-		args := make([]any, len(attrs))
-		for i, attr := range attrs {
-			args[i] = attr
-		}
-		return slog.Group(key, args...)
+		return attrsToGroup(key, attrs)
 
 	case reflect.Map:
-		attrs := make([]slog.Attr, 0, v.Len())
+		// Собираем все строковые ключи мапы
+		keys := make([]string, 0, v.Len())
 		for _, k := range v.MapKeys() {
-			if k.Kind() != reflect.String {
-				continue
+			if k.Kind() == reflect.String {
+				keys = append(keys, k.String())
 			}
-			attrs = append(attrs, toSlogAttr(k.String(), v.MapIndex(k).Interface()))
 		}
-
-		args := make([]any, len(attrs))
-		for i, attr := range attrs {
-			args[i] = attr
+		slices.Sort(keys)
+		attrs := make([]slog.Attr, 0, len(keys))
+		for _, k := range keys {
+			attrs = append(attrs, toSlogAttr(k, v.MapIndex(reflect.ValueOf(k)).Interface()))
 		}
-		return slog.Group(key, args...)
+		return attrsToGroup(key, attrs)
 
 	default:
 		return slog.Any(key, val)
 	}
 }
 
-func (l *loggerImpl) Debug(msg string, args ...any) {
-	l.logger.Debug(msg, args...)
-}
-
-func (l *loggerImpl) Info(msg string, args ...any) {
-	l.logger.Info(msg, args...)
-}
-
-func (l *loggerImpl) Warn(msg string, args ...any) {
-	l.logger.Warn(msg, args...)
-}
-
-func (l *loggerImpl) Error(msg string, args ...any) {
-	l.logger.Error(msg, args...)
+// attrsToGroup создает группу атрибутов с указанным ключом.
+func attrsToGroup(key string, attrs []slog.Attr) slog.Attr {
+	args := make([]any, len(attrs))
+	for i, a := range attrs {
+		args[i] = a
+	}
+	return slog.Group(key, args...)
 }

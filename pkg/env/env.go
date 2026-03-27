@@ -17,10 +17,9 @@ type field struct {
 	defValue   string
 	sep        string
 	isDuration bool
-	typ        reflect.Type
 }
 
-// Load загружает конфигурацию из .env файлов и переменных окружения
+// Load загружает конфигурацию из .env файлов и переменных окружения системы.
 func Load(cfg any, files ...string) error {
 	envMap, err := buildEnvMap(files, true)
 	if err != nil {
@@ -29,7 +28,7 @@ func Load(cfg any, files ...string) error {
 	return apply(cfg, envMap)
 }
 
-// LoadEnv загружает конфигурацию только из переменных окружения
+// LoadEnv загружает конфигурацию только из переменных окружения системы.
 func LoadEnv(cfg any) error {
 	envMap, err := buildEnvMap(nil, true)
 	if err != nil {
@@ -38,7 +37,7 @@ func LoadEnv(cfg any) error {
 	return apply(cfg, envMap)
 }
 
-// LoadFile загружает конфигурацию только из .env файлов
+// LoadFile загружает конфигурацию только из .env файлов.
 func LoadFile(cfg any, files ...string) error {
 	envMap, err := buildEnvMap(files, false)
 	if err != nil {
@@ -47,7 +46,6 @@ func LoadFile(cfg any, files ...string) error {
 	return apply(cfg, envMap)
 }
 
-// buildEnvMap создает карту переменных из файлов и/или системы
 func buildEnvMap(files []string, includeSystem bool) (map[string]string, error) {
 	envMap := make(map[string]string)
 
@@ -71,15 +69,13 @@ func buildEnvMap(files []string, includeSystem bool) (map[string]string, error) 
 	return envMap, nil
 }
 
-// loadFile читает .env файл и добавляет пары ключ-значение в карту
 func loadFile(dest map[string]string, filename string) error {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
 
-	lines := strings.SplitSeq(string(data), "\n")
-	for line := range lines {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -103,7 +99,6 @@ func loadFile(dest map[string]string, filename string) error {
 	return nil
 }
 
-// apply применяет значения из карты к структуре конфигурации
 func apply(cfg any, envMap map[string]string) error {
 	val := reflect.ValueOf(cfg)
 	if val.Kind() != reflect.Pointer || val.IsNil() {
@@ -115,8 +110,7 @@ func apply(cfg any, envMap map[string]string) error {
 		return fmt.Errorf("cfg must point to a struct")
 	}
 
-	typ := val.Type()
-	infos, err := getfileds(typ)
+	infos, err := buildFields(val.Type(), nil, "")
 	if err != nil {
 		return err
 	}
@@ -142,25 +136,10 @@ func apply(cfg any, envMap map[string]string) error {
 		}
 	}
 
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
-// getfileds возвращает метаданные полей структуры
-func getfileds(typ reflect.Type) ([]field, error) {
-	infos, err := buildfileds(typ, nil, "")
-	if err != nil {
-		return nil, err
-	}
-
-	return infos, nil
-}
-
-// buildfileds рекурсивно собирает информацию о полях структуры
-func buildfileds(typ reflect.Type, path []int, prefix string) ([]field, error) {
+func buildFields(typ reflect.Type, path []int, prefix string) ([]field, error) {
 	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
@@ -187,7 +166,7 @@ func buildfileds(typ reflect.Type, path []int, prefix string) ([]field, error) {
 		envKey := buildEnvKey(prefix, f.Name, key)
 
 		if f.Type.Kind() == reflect.Struct && f.Type != reflect.TypeFor[time.Time]() {
-			nested, err := buildfileds(f.Type, currentPath, envKey+"_")
+			nested, err := buildFields(f.Type, currentPath, envKey+"_")
 			if err != nil {
 				return nil, err
 			}
@@ -195,7 +174,7 @@ func buildfileds(typ reflect.Type, path []int, prefix string) ([]field, error) {
 			continue
 		}
 		if f.Type.Kind() == reflect.Ptr && f.Type.Elem().Kind() == reflect.Struct && f.Type.Elem() != reflect.TypeFor[time.Time]() {
-			nested, err := buildfileds(f.Type.Elem(), currentPath, envKey+"_")
+			nested, err := buildFields(f.Type.Elem(), currentPath, envKey+"_")
 			if err != nil {
 				return nil, err
 			}
@@ -203,31 +182,25 @@ func buildfileds(typ reflect.Type, path []int, prefix string) ([]field, error) {
 			continue
 		}
 
-		info := field{
+		if sep == "" {
+			sep = ","
+		}
+
+		infos = append(infos, field{
 			index:      currentPath,
 			envKey:     envKey,
 			required:   required,
 			defValue:   defValue,
 			sep:        sep,
 			isDuration: f.Type == reflect.TypeFor[time.Duration](),
-			typ:        f.Type,
-		}
-
-		if info.sep == "" {
-			info.sep = ","
-		}
-		infos = append(infos, info)
+		})
 	}
 
 	return infos, nil
 }
 
-// parseEnvTag разбирает тег env на составные части
 func parseEnvTag(tag string) (key string, required bool, defValue string, sep string) {
 	parts := strings.Split(tag, ",")
-	if len(parts) == 0 {
-		return "", false, "", ","
-	}
 
 	if parts[0] != "" {
 		key = parts[0]
@@ -238,33 +211,23 @@ func parseEnvTag(tag string) (key string, required bool, defValue string, sep st
 		switch {
 		case part == "required":
 			required = true
-
 		case strings.HasPrefix(part, "default="):
-			defValue = strings.TrimPrefix(part, "default=")
-			defValue = strings.Trim(defValue, "\"'")
-
+			defValue = strings.Trim(strings.TrimPrefix(part, "default="), "\"'")
 		case strings.HasPrefix(part, "sep="):
-			sep = strings.TrimPrefix(part, "sep=")
-			sep = strings.Trim(sep, "\"'")
+			sep = strings.Trim(strings.TrimPrefix(part, "sep="), "\"'")
 		}
-	}
-
-	if sep == "" {
-		sep = ","
 	}
 
 	return
 }
 
-// buildEnvKey формирует ключ переменной окружения
 func buildEnvKey(prefix, fieldName, key string) string {
 	if key != "" {
 		return strings.ToUpper(prefix + key)
 	}
-	return strings.ToUpper(prefix + strings.ToUpper(fieldName))
+	return strings.ToUpper(prefix + fieldName)
 }
 
-// setFieldValue устанавливает значение поля структуры
 func setFieldValue(field reflect.Value, rawValue string, info field) error {
 	if !field.CanSet() {
 		return nil
@@ -282,7 +245,6 @@ func setFieldValue(field reflect.Value, rawValue string, info field) error {
 		if err != nil {
 			return fmt.Errorf("invalid duration: %w", err)
 		}
-
 		field.Set(reflect.ValueOf(d))
 		return nil
 	}
@@ -329,7 +291,6 @@ func setFieldValue(field reflect.Value, rawValue string, info field) error {
 	return nil
 }
 
-// setSliceValue заполняет срез значениями из строки с разделителем
 func setSliceValue(field reflect.Value, rawValue string, sep string) error {
 	items := strings.Split(rawValue, sep)
 	slice := reflect.MakeSlice(field.Type(), len(items), len(items))

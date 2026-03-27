@@ -1,38 +1,58 @@
 # App
 
-Простое Go-приложение с HTTP-сервером и PostgreSQL.
+Go-сервис с gRPC + grpc-gateway и PostgreSQL.
 
-## Требования
+## Быстрый старт
 
-- Go 1.25+
-- Docker и Docker Compose (для БД)
+```bash
+# 1. Создать .env и поднять PostgreSQL
+make init
 
-## Запуск
+# 2. Запустить
+make run
+```
 
-1. Инициализация (создаёт `.env` из `example.env` и поднимает PostgreSQL):
+Сервис поднимает два порта:
+- `:9090` — gRPC
+- `:8080` — HTTP/JSON (grpc-gateway)
 
-   ```bash
-   make init
-   ```
+## Команды
 
-2. Запуск приложения:
+| Команда           | Описание                              |
+|-------------------|---------------------------------------|
+| `make init`       | Создать `.env` и запустить БД         |
+| `make run`        | Запустить приложение                  |
+| `make build`      | Собрать бинарь в `bin/app`            |
+| `make proto`      | Сгенерировать код из `.proto` файлов  |
+| `make docker-up`  | Запустить PostgreSQL                  |
+| `make docker-down`| Остановить PostgreSQL                 |
+| `make db-shell`   | Подключиться к БД (psql)              |
 
-   ```bash
-   go run ./cmd/app
-   ```
+## API
 
-Приложение слушает порт из `HTTP_PORT` (по умолчанию 8080).
+| Метод | gRPC | HTTP |
+|---|---|---|
+| Liveness | `health.v1.HealthService/Health` | `GET /health` |
 
-## Команды Make
+```bash
+# HTTP
+curl http://localhost:8080/health
 
-| Команда        | Описание                    |
-|----------------|-----------------------------|
-| `make init`    | Создать .env и запустить БД |
-| `make docker-up`   | Запустить PostgreSQL       |
-| `make docker-down` | Остановить PostgreSQL      |
-| `make db-shell`    | Подключиться к БД (psql)   |
-| `make help`       | Список команд              |
+# gRPC (требует APP_DEBUG=true)
+grpcurl -plaintext localhost:9090 health.v1.HealthService/Health
+```
 
 ## Конфигурация
 
-Переменные окружения задаются в `.env`. Пример — в `example.env`.
+Все переменные задаются в `.env`. Пример — в `example.env`.
+
+| Переменная | По умолчанию | Описание |
+|---|---|---|
+| `APP_NAME` | — | Имя приложения |
+| `APP_ENV` | `development` | Окружение |
+| `APP_DEBUG` | `false` | Включает gRPC reflection |
+| `HTTP_PORT` | `8080` | Порт grpc-gateway |
+| `GRPC_PORT` | `9090` | Порт gRPC |
+| `DATABASE_*` | — | Параметры PostgreSQL |
+| `LOG_LEVEL` | `debug` | `debug / info / warn / error` |
+| `LOG_FORMAT` | `text` | `text / json` |

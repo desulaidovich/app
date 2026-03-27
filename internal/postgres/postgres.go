@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -107,23 +108,16 @@ func WithDSN(dsn string) Option {
 
 func WithSSLMode(mode string) Option {
 	return func(c *Config) error {
-		validModes := map[string]bool{
-			"disable":     true,
-			"require":     true,
-			"verify-ca":   true,
-			"verify-full": true,
-		}
-		if !validModes[mode] {
+		if !slices.Contains([]string{"disable", "require", "verify-ca", "verify-full"}, mode) {
 			return fmt.Errorf("unsupported SSL mode: %s", mode)
 		}
-
-		c.DSN = addOrUpdateParam(c.DSN, "sslmode", mode)
+		c.DSN += "&sslmode=" + mode
 		return nil
 	}
 }
 
 func New(ctx context.Context, opts ...Option) (*Pool, error) {
-	config := &Config{
+	cfg := &Config{
 		MaxConns:          defaultMaxConns,
 		MinConns:          defaultMinConns,
 		MaxConnLifetime:   defaultMaxConnLifetime,
@@ -133,28 +127,28 @@ func New(ctx context.Context, opts ...Option) (*Pool, error) {
 	}
 
 	for _, opt := range opts {
-		if err := opt(config); err != nil {
-			return nil, fmt.Errorf("failed to apply option: %w", err)
+		if err := opt(cfg); err != nil {
+			return nil, fmt.Errorf("postgres option: %w", err)
 		}
 	}
 
-	if config.DSN == "" {
-		return nil, errors.New("dsn is required: use WithDSN option")
+	if cfg.DSN == "" {
+		return nil, errors.New("DSN is required: use WithDSN option")
 	}
 
-	pgxConfig, err := pgxpool.ParseConfig(config.DSN)
+	pgxCfg, err := pgxpool.ParseConfig(cfg.DSN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse DSN: %w", err)
 	}
 
-	pgxConfig.MaxConns = config.MaxConns
-	pgxConfig.MinConns = config.MinConns
-	pgxConfig.MaxConnLifetime = config.MaxConnLifetime
-	pgxConfig.MaxConnIdleTime = config.MaxConnIdleTime
-	pgxConfig.HealthCheckPeriod = config.HealthCheckPeriod
-	pgxConfig.ConnConfig.ConnectTimeout = config.ConnectTimeout
+	pgxCfg.MaxConns = cfg.MaxConns
+	pgxCfg.MinConns = cfg.MinConns
+	pgxCfg.MaxConnLifetime = cfg.MaxConnLifetime
+	pgxCfg.MaxConnIdleTime = cfg.MaxConnIdleTime
+	pgxCfg.HealthCheckPeriod = cfg.HealthCheckPeriod
+	pgxCfg.ConnConfig.ConnectTimeout = cfg.ConnectTimeout
 
-	pool, err := pgxpool.NewWithConfig(ctx, pgxConfig)
+	pool, err := pgxpool.NewWithConfig(ctx, pgxCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pool: %w", err)
 	}
@@ -164,32 +158,11 @@ func New(ctx context.Context, opts ...Option) (*Pool, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &Pool{
-		Pool:   pool,
-		config: config,
-	}, nil
-}
-
-func (p *Pool) Config() Config {
-	return *p.config
-}
-
-func (p *Pool) Stats() *pgxpool.Stat {
-	return p.Stat()
+	return &Pool{Pool: pool, config: cfg}, nil
 }
 
 func (p *Pool) Close() {
 	if p.Pool != nil {
 		p.Pool.Close()
 	}
-}
-
-func addOrUpdateParam(dsn, key, value string) string {
-	param := fmt.Sprintf("%s=%s", key, value)
-
-	if dsn == "" {
-		return param
-	}
-
-	return dsn + "&" + param
 }

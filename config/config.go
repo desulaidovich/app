@@ -16,6 +16,10 @@ type Config struct {
 		Port string `env:"PORT,default=8080"`
 	} `env:"HTTP"`
 
+	GRPC struct {
+		Port string `env:"PORT,default=9090"`
+	} `env:"GRPC"`
+
 	Database struct {
 		Host    string `env:"HOST"`
 		Port    int    `env:"PORT,default=5432"`
@@ -29,7 +33,7 @@ type Config struct {
 			MaxConns        int32         `env:"MAX_CONNS,default=25"`
 			MinConns        int32         `env:"MIN_CONNS,default=5"`
 			MaxConnLifetime time.Duration `env:"MAX_CONN_LIFETIME,default=5m"`
-			MaxConnIdleTime time.Duration `env:"DMAX_CONN_IDLE_TIME,default=5m"`
+			MaxConnIdleTime time.Duration `env:"MAX_CONN_IDLE_TIME,default=5m"`
 			ConnectTimeout  time.Duration `env:"CONNECT_TIMEOUT,default=5s"`
 		}
 	} `env:"DATABASE"`
@@ -37,18 +41,18 @@ type Config struct {
 	Log struct {
 		Level      string `env:"LEVEL,default=debug"`
 		Format     string `env:"FORMAT,default=text"`
-		TimeFormat string `env:"TIMEFORMAT,default=2006-01-02T15:04:05Z07:00"`
+		TimeFormat string `env:"TIME_FORMAT,default=2006-01-02T15:04:05Z07:00"`
 	} `env:"LOG"`
 }
 
+// DSN строит строку подключения к PostgreSQL. SSL-режим передаётся отдельно через WithSSLMode.
 func (cfg Config) DSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?application_name=%s&sslmode=%s",
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?application_name=%s",
 		cfg.Database.User.Name,
 		cfg.Database.User.Password,
 		cfg.Database.Host,
 		cfg.Database.Port,
 		cfg.Database.Name,
 		cfg.App.Name,
-		cfg.Database.SSLMode,
 	)
 }
