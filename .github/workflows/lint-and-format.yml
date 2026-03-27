@@ -45,8 +45,7 @@ jobs:
         with:
           version: v2.7.2
           args: --timeout=5m --verbose
-          # Включаем все популярные линтеры
-          # Конфигурацию можно вынести в .golangci.yml
+          skip-cache: true
 
       - name: Check go mod tidy
         run: |
