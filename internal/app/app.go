@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	healthv1 "github.com/desulaidovich/app/api/health/v1"
+	shortenerv1 "github.com/desulaidovich/app/api/shortener/v1"
 	"github.com/desulaidovich/app/config"
 	"github.com/desulaidovich/app/internal/grpcserver"
 	"github.com/desulaidovich/app/internal/handler"
@@ -119,12 +120,20 @@ func New(opts ...Option) (*App, error) {
 		reflection.Register(app.grpcSrv.Server())
 	}
 
+	gwMux := runtime.NewServeMux()
+
 	healthHandler := handler.NewHealthHandler(app.version, app.build)
 	healthv1.RegisterHealthServiceServer(app.grpcSrv.Server(), healthHandler)
 
-	gwMux := runtime.NewServeMux()
 	if err := healthv1.RegisterHealthServiceHandlerServer(context.Background(), gwMux, healthHandler); err != nil {
 		return nil, fmt.Errorf("failed to register health service handler: %w", err)
+	}
+
+	shortenerhandler := handler.NewShortenerHandler()
+	shortenerv1.RegisterShortenerServiceServer(app.grpcSrv.Server(), shortenerhandler)
+
+	if err := shortenerv1.RegisterShortenerServiceHandlerServer(context.Background(), gwMux, shortenerhandler); err != nil {
+		return nil, fmt.Errorf("failed to register shortener service handler: %w", err)
 	}
 
 	app.httpSrv = &http.Server{
