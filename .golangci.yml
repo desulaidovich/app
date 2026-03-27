@@ -1,0 +1,56 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - gofmt        # Форматирование
+    - govet        # Подозрительные конструкции
+    - errcheck     # Обработка ошибок
+    - staticcheck  # Статический анализ
+    - unused       # Неиспользуемый код
+    - ineffassign  # Неэффективные присваивания
+    - gosimple     # Упрощение кода
+    - revive       # Замена golint
+    - misspell     # Орфография в комментариях
+    - gocritic     # Расширенный анализ
+    - gocyclo      # Цикломатическая сложность
+    - gosec        # Безопасность
+    - nakedret     # Возврат без аргументов
+
+  disable:
+    - scopelint    # Устарел
+    - maligned     # Устарел
+
+linters-settings:
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+      - name: blank-imports
+      - name: context-as-argument
+      - name: error-return
+
+  gocyclo:
+    min-complexity: 15
+
+  gosec:
+    excludes:
+      - G104  # Игнорируем errcheck дублирование
+
+  gofmt:
+    simplify: true
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - gosec
+
+    - path: main\.go
+      linters:
+        - gocyclo
